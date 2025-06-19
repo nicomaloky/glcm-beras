@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisis Jenis Beras | GLCM + Warna</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        body { 
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px 0;
+            overflow-x: hidden;
+        }
+        .main-container {
+            max-width: 750px;
+            width: 100%;
+            animation: slideUp 0.7s ease-out forwards;
+        }
+        .card { 
+            background-color: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            border-radius: 15px;
+        }
+        #riceCanvas { 
+            border: 3px dashed #d1d8e0; 
+            border-radius: 12px; 
+            cursor: pointer;
+            width: 100%;
+            height: auto;
+            background-color: #ffffff;
+            transition: all 0.3s ease;
+        }
+        #riceCanvas.dragover {
+            border-color: #4a69bd;
+            background-color: #f1f2f6;
+            transform: scale(1.01);
+        }
+        .btn {
+            transition: all 0.25s ease-out;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        .btn-primary {
+            background: linear-gradient(45deg, #4a69bd, #1e3799);
+            border: none;
+            padding: 12px 0;
+        }
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 7px 20px rgba(30, 55, 153, 0.3);
+            background: linear-gradient(45deg, #5b7dce, #2a49b8);
+        }
+        .btn-primary:active {
+            transform: translateY(0px) scale(0.98);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        .btn-secondary {
+            background-color: #7f8fa6;
+            border: none;
+            padding: 10px 0;
+        }
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            background-color: #6c7a8f;
+        }
+        .spinner-border {
+            display: none;
+            width: 1.2rem;
+            height: 1.2rem;
+            margin-right: 8px;
+        }
+        #result-container {
+            display: none;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+        }
+        #result-container.show {
+            display: block;
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+        .table {
+            background-color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <div class="card p-4 p-md-5">
+            <div class="text-center mb-4">
+                <h2 class="fw-bold">🔬 Analisis Citra Beras</h2>
+                <p class="text-muted">Mengidentifikasi jenis beras berdasarkan fitur tekstur & warna.</p>
+            </div>
+            
+            <canvas id="riceCanvas" width="640" height="400"></canvas>
+            <p class="text-center text-muted small mt-2">Klik, tempel (paste), atau seret (drag & drop) gambar ke area di atas.</p>
+            
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+
+            <div class="d-grid gap-2 mt-3">
+                <button class="btn btn-primary btn-lg d-flex align-items-center justify-content-center" id="detectButton" disabled>
+                    <span class="spinner-border" role="status" aria-hidden="true"></span>
+                    <span class="button-text">Analisis Gambar</span>
+                </button>
+                <button class="btn btn-secondary" id="resetButton">Reset</button>
+            </div>
+
+            <div id="result-container" class="mt-4">
+                <h4 class="text-center mb-3">Hasil Analisis</h4>
+                <div class="row g-4">
+                    <div class="col-md-7">
+                        <h5>📝 Deskripsi</h5>
+                        <p id="deskripsi-hasil" class="text-muted"></p>
+                    </div>
+                    <div class="col-md-5">
+                        <h5>🔢 Data Ekstraksi Fitur</h5>
+                        <table class="table table-sm table-bordered table-striped">
+                            <tbody id="fitur-tabel"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <footer class="text-center text-secondary mt-4 mb-4">
+            <small>Reza - Nicola - Dimas</small>
+        </footer>
+    </div>
+
+<script>
+    const canvas = document.getElementById('riceCanvas');
+    const ctx = canvas.getContext('2d');
+    const fileInput = document.getElementById('fileInput');
+    const detectButton = document.getElementById('detectButton');
+    const resetButton = document.getElementById('resetButton');
+    const spinner = detectButton.querySelector('.spinner-border');
+    const buttonText = detectButton.querySelector('.button-text');
+    
+    const resultContainer = document.getElementById('result-container');
+    const deskripsiEl = document.getElementById('deskripsi-hasil');
+    const fiturTabel = document.getElementById('fitur-tabel');
+    
+    let originalImage = null;
+
+    function drawInitialMessage() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#a4b0be';
+        ctx.font = '500 20px Poppins';
+        ctx.textAlign = 'center';
+        ctx.fillText('Area Gambar Anda', canvas.width / 2, canvas.height / 2);
+        originalImage = null;
+        detectButton.disabled = true;
+        resultContainer.classList.remove('show');
+    }
+
+    function drawImageOnCanvas(image) {
+        originalImage = image;
+        const hRatio = canvas.width / image.width;
+        const vRatio = canvas.height / image.height;
+        const ratio = Math.min(hRatio, vRatio, 1);
+        const centerShift_x = (canvas.width - image.width * ratio) / 2;
+        const centerShift_y = (canvas.height - image.height * ratio) / 2;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(image, 0, 0, image.width, image.height, centerShift_x, centerShift_y, image.width * ratio, image.height * ratio);
+        detectButton.disabled = false;
+        resultContainer.classList.remove('show');
+    }
+
+    canvas.addEventListener('click', () => !originalImage && fileInput.click());
+    fileInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => { const img = new Image(); img.onload = () => drawImageOnCanvas(img); img.src = e.target.result; };
+            reader.readAsDataURL(file);
+        }
+    });
+    window.addEventListener('paste', (event) => {
+        const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+        for (const item of items) {
+            if (item.type.indexOf('image') === 0) {
+                const blob = item.getAsFile();
+                const reader = new FileReader();
+                reader.onload = (e) => { const img = new Image(); img.onload = () => drawImageOnCanvas(img); img.src = e.target.result; };
+                reader.readAsDataURL(blob);
+            }
+        }
+    });
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      canvas.addEventListener(eventName, e => { e.preventDefault(); e.stopPropagation(); }, false);
+    });
+    ['dragenter', 'dragover'].forEach(eventName => {
+      canvas.addEventListener(eventName, () => canvas.classList.add('dragover'), false);
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+      canvas.addEventListener(eventName, () => canvas.classList.remove('dragover'), false);
+    });
+    
+    canvas.addEventListener('drop', e => {
+        canvas.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (e) => { const img = new Image(); img.onload = () => drawImageOnCanvas(img); img.src = e.target.result; };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    detectButton.addEventListener('click', async () => {
+        if (!originalImage) return;
+        spinner.style.display = 'inline-block';
+        buttonText.textContent = 'Menganalisis...';
+        detectButton.disabled = true;
+        resultContainer.classList.remove('show');
+        
+        const imageDataURL = canvas.toDataURL('image/png');
+
+        try {
+            const response = await fetch('/predict_canvas', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageDataURL }),
+            });
+            if (!response.ok) { throw new Error((await response.json()).error || 'Server error'); }
+            const result = await response.json();
+            
+            drawResultOnCanvas(result);
+
+            deskripsiEl.textContent = result.deskripsi;
+            fiturTabel.innerHTML = '';
+            for (const [key, value] of Object.entries(result.fitur)) {
+                const row = `<tr>
+                                <td class="fw-bold text-capitalize">${key.replace(/_/g, ' ')}</td>
+                                <td>${value}</td>
+                             </tr>`;
+                fiturTabel.innerHTML += row;
+            }
+            resultContainer.classList.add('show');
+
+        } catch (error) {
+            console.error('Error:', error);
+            alert(`Gagal melakukan prediksi: ${error.message}`);
+        } finally {
+            spinner.style.display = 'none';
+            buttonText.textContent = 'Analisis Gambar';
+            detectButton.disabled = false;
+        }
+    });
+    
+    function drawResultOnCanvas(result) {
+        drawImageOnCanvas(originalImage);
+        const text = `${result.jenis_beras} (${result.akurasi}%)`;
+        ctx.font = '600 24px Poppins';
+        const textMetrics = ctx.measureText(text);
+        const textWidth = textMetrics.width;
+        
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.beginPath();
+        ctx.roundRect((canvas.width - textWidth) / 2 - 15, canvas.height - 65, textWidth + 30, 40, [10]);
+        ctx.fill();
+
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, canvas.width / 2, canvas.height - 45);
+    }
+
+    resetButton.addEventListener('click', () => {
+        drawInitialMessage();
+        fileInput.value = '';
+    });
+
+    drawInitialMessage();
+</script>
+</body>
+</html>
